@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from . import build_app
+from . import build_app, static_text
 from telegram import (
     Update, InlineKeyboardButton, KeyboardButton,
     KeyboardButtonPollType, ReplyKeyboardMarkup,
@@ -16,9 +16,18 @@ import numpy as np
 from datetime import datetime
 
 load_dotenv()
+text_data = static_text()
 
-ALL_ACTIONS, END = list(map(lambda x: str(x), range(2)))
-ABOUT_DESC, MASSAGES_DESC, TO_REGISTER, ON_TEST, *_ = list(map(lambda x: str(x), range(2,15)))
+ALL_ACTIONS, HOME, END, *_ = list(map(lambda x: str(x), range(5)))
+(
+    ABOUT_DESC, 
+    MASSAGES_DESC, 
+    TO_REGISTER,
+    PROMOTIONS,
+    REGISTER_INQUIRY,
+    PROMOTIONS_INQUIRY,
+    *_
+) = list(map(lambda x: str(x), range(5, 20)))
 START_OVER = str(100)
 
 (
@@ -31,6 +40,7 @@ START_OVER = str(100)
     TEST,
     ASK_CALL,
     MAIL_SALES,
+    ON_TEST_TIME,
     #* about
     EXPERIENCE,
     CERTIFICATES,
@@ -43,15 +53,37 @@ START_OVER = str(100)
     SPORT,
     TAI,
     HONEY,
+    EXPRESS,
+    #* register
+    MEDICAL_COMPLAINTS,
+    PICK_MASSAGE,
+    PICK_PROMOTION,
     #* stoppers
-    REGISTER_ON_TEST,
     FINISH,
     BACK,
     STOP,
     *_
 )  = list(map(lambda x: str(x), range(500, 600)))
 
-MASTER_ID = 6046133979
+TIME_GRID = [
+    ["08:00", "08:30", "09:00"],
+    ["09:30", "10:00", "10:30"],
+    ["11:00", "11:30", "12:00"],
+    ["12:30", "13:00", "13:30"],
+    ["14:00", "14:30", "15:00"],
+    ["15:30", "16:00", "16:30"],
+    ["17:00", "17:30", "18:00"],
+    ["18:30", "19:00", "19:30"]
+]
+
+MASSAGE_GRID = [
+    ["Антицеллюлитный", "Лечебный"],
+    ["Спортивный", "Меридианный"],
+    ["Миофасциальный", "Профилактический"],
+    ["Тайский", "Медовый"]
+]
+
+MASTER_ID = 355535366 # 6046133979
 
 
 class Massage:
@@ -164,20 +196,16 @@ class Massage:
         context: ContextTypes.DEFAULT_TYPE
     ):
     
-        welcome = [
+        to_btns = [
             ("О массажисте Викторе", ABOUT),
             ("Виды массажа", MASSAGES),
             ("Прейскурант", PRICES),
-            ("Тестовый экспресс-массаж", ON_TEST),
-            ("Записаться", REGISTER),
-            ("Заказать звонок", ASK_CALL),
-            ("Подписаться на рассылку акций", MAIL_SALES),
+            ("Акции", PROMOTIONS),
+            ("Записаться", TO_REGISTER),
+            # ("Заказать звонок", ASK_CALL),
+            # ("Подписаться на рассылку акций", MAIL_SALES),
         ]
-        # welcome_callback_data = [
-        #     "about", "massage", "prices", "/register",
-        #     "/test", "/askcall"
-        # ]
-        btns = self._build_btns(2, welcome)
+        btns = self._build_btns(2, to_btns)
 
         if context.user_data.get(START_OVER):
             print("Start Over")
@@ -194,35 +222,21 @@ class Massage:
                 reply_markup=btns
             )
         context.user_data[START_OVER] = False
-        return ALL_ACTIONS 
-
-    # async def go(
-    #     self,
-    #     update: Update, 
-    #     context: ContextTypes.DEFAULT_TYPE
-    # ):
-    #     val = update.message.reply_text(
-    #             "HELLOOOOOO",
-    #             reply_markup=ReplyKeyboardMarkup(
-    #             [["1", "2", "3"], ["4", "5", "6"], ["7", "8 ", "9"], ["END"]],
-    #             one_time_keyboard = False,
-    #             input_field_placeholder="Choose any"
-    #         )
-    #     )
+        return ALL_ACTIONS
 
     async def about(
         self,
         update: Update, 
         context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        prices = [
+        to_btns = [
             ("Опыт работы", EXPERIENCE),
             ("Сертификаты", CERTIFICATES),
             ("Назад", BACK),
             ("Завершить", FINISH)
         ]
         
-        btns = self._build_btns(2, prices)
+        btns = self._build_btns(2, to_btns)
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(text="BLABLABLA", reply_markup=btns)
         
@@ -249,19 +263,21 @@ class Massage:
         update: Update, 
         context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        massages = [
-            ("Антицеллюлитный", ANTICEL),
-            ("Лечебный", MEDICAL),
-            ("Спортивный", SPORT),
-            ("Меридианный", MERIDIAN),
-            ("Миофасциальный", MIOPHAS),
-            ("Профилактический", PROPHYLACTIC),
-            ("Тайский", TAI),
-            ("Медовый", HONEY),
-            ("Назад", BACK),
-            ("Завершить", FINISH)
+        consts = [
+            ANTICEL, MEDICAL,
+            SPORT, MERIDIAN,
+            MIOPHAS, PROPHYLACTIC,
+            TAI, HONEY,
+            BACK, FINISH
         ]
-        btns = self._build_btns(2, massages)
+
+        lst = [
+            *text_data.get("massages").get("massages_list"),
+            "Назад", "Завершить"
+        ]
+
+        to_btns = list(zip(lst, consts))
+        btns = self._build_btns(2, to_btns)
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(text="all massages", reply_markup=btns)
 
@@ -275,11 +291,11 @@ class Massage:
         
         await update.callback_query.answer()
         massage_id = update.callback_query.data
-        massage_desc = [
+        to_btns = [
             ("Назад", BACK),
             ("Завершить", FINISH)
         ]
-        btns = self._build_btns(2, massage_desc)
+        btns = self._build_btns(2, to_btns)
 
         print(update.callback_query.from_user)
         await update.callback_query.edit_message_text(text="INFO about ")
@@ -290,15 +306,16 @@ class Massage:
         context: ContextTypes.DEFAULT_TYPE
     ) -> None:
         
-        prices = [
+        to_btns = [
             ("Записаться", REGISTER),
             ("Назад", BACK),
             ("Завершить", FINISH)
         ]
-        btns = self._build_btns(2, prices)
+        btns = self._build_btns(2, to_btns)
         prices = "The price list of services provided by Viktor"
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(text=prices, reply_markup=btns)
+        return ALL_ACTIONS
         
     async def register_to_master(
         self,
@@ -307,96 +324,169 @@ class Massage:
         **kwargs
     ) -> None:
         print("resending to master")
+        reason = kwargs.get('complaints')\
+            if kwargs.get('complaints')\
+            else text_data.get("massages")\
+                .get("mapping")\
+                .get(kwargs.get('massage'))  + ' массаж'
         # to_resend = update.message.text
         await context.bot.send_message(
             MASTER_ID,
             text=f"Мастер Виктор, У Вас новое сообщение\n"
             + f"Сообщение от: *{kwargs.get('name')}*\n"
-            + f"Жалоба на: *{kwargs.get('complaints')}*\n"
+            + f"Жалоба / Массаж: *{reason}*\n"
             + f"Предпочтительное время сеанса: *{kwargs.get('time')}*\n"
             + f"Контактный номер телефона: {kwargs.get('phone_number')}",
             parse_mode=telegram.constants.ParseMode.MARKDOWN_V2
         )
-    
-    async def register(
+
+    async def promotions(
         self,
         update: Update, 
         context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self.register_store[update.callback_query.from_user.id] = dict()
-         
-        appeal_to = update.callback_query.from_user.first_name
-        self.register_store[update.callback_query.from_user.id]["name"] = appeal_to
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(
-            f"Спасибо за обращение, {appeal_to}.\nДля завершение процедуры записи, пожалуйста, ответьте на несколько вопросов\n"
-            + "Какие у Вас жалобы?"
-        )
-        # await self.resend_to_master(update, context)
 
-        
-        return TO_REGISTER
-
-    async def on_test(
-        self,
-        update: Update, 
-        context: ContextTypes.DEFAULT_TYPE
-    ) -> None:
-        
-        on_test = [
-            ("Записаться", REGISTER),
+        to_btns = [
             ("Назад", BACK),
             ("Завершить", FINISH)
         ]
-        btns = self._build_btns(2, on_test)
+
+        btns = self._build_btns(1, to_btns)
+
         self.register_store[update.callback_query.from_user.id] = dict()
          
         appeal_to = update.callback_query.from_user.first_name
         self.register_store[update.callback_query.from_user.id]["name"] = appeal_to
-        await update.callback_query.answer()
+        
+        promotions_list = text_data.get("promotions").get("promotions_list")
+        promotions_desc = text_data.get("promotions").get("promotions_desc")
+        promotions = ""
+        for i in range(len(promotions_list)):
+            promotions += promotions_list[i] + "\n".join(promotions_desc[i])
+        
+        # print(promotions)
         await update.callback_query.edit_message_text(
-            f"Спасибо за обращение, {appeal_to}.\n"
-            + "Позвольте подробнее рассказать про тестовый экспресс-массаж шейно-воротниковой зоны\n" 
-            + "Такой массаж направлен на снятие усталости с мышц спины и шеи, что положительно влияет на качество сна\n"
-            + "Длительность сеанса не более 10 минут. Стоимость 250 рублей",
+            "В настоящее время Вы можете воспользоваться следующими акциями:\n\n"
+            + promotions,
             reply_markup=btns
         )
-        return TO_REGISTER
+        return PROMOTIONS_INQUIRY
 
-    def _make_time_grid(
+    # async def register(
+    #     self,
+    #     update: Update, 
+    #     context: ContextTypes.DEFAULT_TYPE
+    # ) -> None:
+        
+    #     to_btns = [
+    #         ("Начать", TO_REGISTER),
+    #         ("Назад", HOME),
+    #         ("Завершить", FINISH)
+    #     ]
+    #     btns = self._build_btns(2, to_btns)
+        
+    #     self.register_store[update.callback_query.from_user.id] = dict()
+         
+    #     appeal_to = update.callback_query.from_user.first_name
+    #     self.register_store[update.callback_query.from_user.id]["name"] = appeal_to
+
+    #     await update.callback_query.answer()
+    #     await update.callback_query.edit_message_text(
+    #         f"Спасибо за обращение, {appeal_to}.\n"
+    #         + "Для завершение процедуры записи, пожалуйста, ответьте на несколько вопросов\n",
+
+    #         reply_markup=btns
+            
+    #     )
+    #     return ALL_ACTIONS
+        
+    async def register_inquiry(
         self,
-        # from_,
-        # to_
+        update: Update, 
+        context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        # print(datetime.strptime(time_str, "%H:%M").hour)
-        time_grid = [
-            ["08:00", "08:30", "09:00"],
-            ["09:30", "10:00", "10:30"],
-            ["11:00", "11:30", "12:00"],
-            ["12:30", "13:00", "13:30"],
-            ["14:00", "14:30", "15:00"],
-            ["15:30", "16:00", "16:30"],
-            ["17:00", "17:30", "18:00"],
-            ["18:30", "19:00", "19:30"]
+        
+        to_btns = [
+            ("Выбрать вид массажа", PICK_MASSAGE),
+            ("У меня медицинские показания", MEDICAL_COMPLAINTS),
+            # ("Записаться", ON_TEST_TIME),
+            ("Назад", BACK),
+            ("Завершить", FINISH)
         ]
-        return time_grid
+        btns = self._build_btns(2, to_btns)
+        
+        self.register_store[update.callback_query.from_user.id] = dict()
+         
+        appeal_to = update.callback_query.from_user.first_name
+        self.register_store[update.callback_query.from_user.id]["name"] = appeal_to
 
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            "Вас интересует определенный вид массажа?\n",
+            reply_markup=btns
+            
+        )
+        
+
+        return REGISTER_INQUIRY
+
+    async def register_medical_complaints(
+        self,
+        update: Update, 
+        context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        # self.register_store[update.message.from_user.id]["complaints"] = update.message.text
+
+        await update.callback_query.edit_message_text(
+            "Опишите свои жалобы и беспокойства, пожалуйста 📝",
+        )
+        return REGISTER_INQUIRY
+    
+    async def register_massage(
+        self,
+        update: Update, 
+        context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+
+        massages = text_data.get("massages").get("massages_list")
+        emoji = text_data.get("numerical_emoji")
+        massage_services = ""
+        for i in range(len(massages)):
+            massage_services += f"{emoji[i]}   {massages[i]}\n\n"
+        
+        print(massage_services)
+        await update.callback_query.edit_message_text(
+            "В настоящее время Вам могут быть предоставлены следующие услуги массажа 📋\n\n"
+            + massage_services 
+            +"Отправьте номер услуги, пожалуйста\n"
+            +"Если Вы затрудняетесь сделать выбор, то отправьте 0️⃣\n"
+            +"В этом случае мастер проконсультирует Вас и ответит на все Ваши вопросы"
+            
+        )
+        return REGISTER_INQUIRY
+    
     async def register_inquiry_time(
         self,
         update: Update, 
         context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        self.register_store[update.message.from_user.id]["complaints"] = update.message.text
+        message = update.message.text
+        try:
+            int(message)
+            self.register_store[update.message.from_user.id]["massage"] = message
+        except ValueError:
+            self.register_store[update.message.from_user.id]["complaints"] = message
 
+        print(self.register_store)
         await update.message.reply_text(
-            "Какое предпочтительное время для сеанса?",
+            "Какое время сеанса для Вас наиболее предпочтительно?",
             reply_markup=ReplyKeyboardMarkup(
-                self._make_time_grid(),  # replace to time shcedule
+                TIME_GRID,
                 one_time_keyboard = True,
             )
         )
-        return TO_REGISTER
-    
+        return REGISTER_INQUIRY
+
     async def register_inquiry_phone(
         self,
         update: Update, 
@@ -412,15 +502,15 @@ class Massage:
             # one_time_keyboard = False,
         )
         await update.message.reply_text(
-            "Введите контактный номер телефона",
+            "☎ Пожалуйста, подтвердите отправку контактного номера телефона",
             reply_markup=ReplyKeyboardMarkup(
                 [[phone_btn]], 
                 one_time_keyboard = True
             )
         )
-        return TO_REGISTER
+        return REGISTER_INQUIRY
 
-    def check_number_correction(
+    def number_correction(
         self,
         string
     ):
@@ -436,7 +526,7 @@ class Massage:
         update: Update, 
         context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        phone_number = self.check_number_correction(update.message.contact.phone_number)
+        phone_number = self.number_correction(update.message.contact.phone_number)
         self.register_store[update.message.from_user.id]["phone_number"] = phone_number
         await self.register_to_master(
             update,
@@ -444,8 +534,9 @@ class Massage:
             **self.register_store[update.message.from_user.id]
         )
         await update.message.reply_text(
-            "Спасибо, Ваше обращение зарегистрировано."
-            + "Ожидайте звонка для подтверждения записи"
+            "Спасибо 🙏\n"
+            + "Ваше обращение зарегистрировано\n"
+            + "⏰ Ожидайте звонка для подтверждения записи"
         )
         
         return ALL_ACTIONS
@@ -461,6 +552,18 @@ class Massage:
 
         await self.start(update, context)
         return END
+
+    async def home(
+        self,
+        update: Update, 
+        context: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        
+        context.user_data[START_OVER] = True
+        print("Back to Home ", context.user_data[START_OVER])
+
+        await self.start(update, context)
+        return ALL_ACTIONS
     
     async def finish(
         self,
@@ -470,7 +573,8 @@ class Massage:
         
         context.user_data[START_OVER] = False
         await update.callback_query.edit_message_text(
-            text="Всего Вам хорошего. Если Вам что-то будет нужно, вы знаете где меня найти"
+            text="Всего Вам хорошего 👋\n" 
+            + "Если Вам что-то будет нужно, вы знаете где меня найти"
         )
 
     async def stop(
@@ -485,13 +589,19 @@ class Massage:
  
     def make_pages(self):
 
+        back = CallbackQueryHandler(self.back, pattern=BACK)
+        register_message_handlers = [
+            MessageHandler(filters=filters.TEXT & (~filters.COMMAND) & (~filters.Regex(r'\d+:\d+')), callback=self.register_inquiry_time),
+            MessageHandler(filters=filters.Regex(r'\d+:\d+'), callback=self.register_inquiry_phone),
+            MessageHandler(filters=filters.CONTACT, callback=self.register_inquiry_finish),
+        ]
         about = ConversationHandler(
             entry_points = [CallbackQueryHandler(self.about, pattern=ABOUT)],
             states = {
                 ABOUT_DESC: [
                     CallbackQueryHandler(self.experience, pattern=EXPERIENCE),
                     CallbackQueryHandler(self.certificates, pattern=CERTIFICATES),
-                    CallbackQueryHandler(self.back, pattern=BACK)
+                    back
                 ]
             },
             fallbacks = [
@@ -512,7 +622,8 @@ class Massage:
                     CallbackQueryHandler(
                         self.massage_desc, 
                         pattern=f"{ANTICEL}|{MEDICAL}|{MERIDIAN}|{SPORT}|{MIOPHAS}|{PROPHYLACTIC}|{TAI}|{HONEY}"
-                    )
+                    ),
+                    back
                 ]
             },
             fallbacks = [
@@ -526,28 +637,48 @@ class Massage:
         )
         register = ConversationHandler(
             entry_points = [
-                CallbackQueryHandler(self.register, pattern=REGISTER),
-                CallbackQueryHandler(self.on_test, pattern=ON_TEST)
-                # CallbackQueryHandler(self.register_on_test, pattern=REGISTER_ON_TEST),
+                CallbackQueryHandler(self.register_inquiry, pattern=TO_REGISTER),
+                # CallbackQueryHandler(self.ontest, pattern=ON_TEST) #!
             ],
             states = {
-                TO_REGISTER: [
-                    CallbackQueryHandler(self.finish, pattern=FINISH),
-                    MessageHandler(filters=filters.TEXT & (~filters.COMMAND) & (~filters.Regex(r'\d+:\d+')), callback=self.register_inquiry_time),
-                    MessageHandler(filters=filters.Regex(r'\d+:\d+'), callback=self.register_inquiry_phone),
-                    MessageHandler(filters=filters.CONTACT, callback=self.register_inquiry_finish)
-                    
+                REGISTER_INQUIRY: [
+                    CallbackQueryHandler(self.register_massage, pattern=PICK_MASSAGE),
+                    CallbackQueryHandler(self.register_medical_complaints, pattern=MEDICAL_COMPLAINTS),
+                    *register_message_handlers,
+                    back
                 ]
             },
             fallbacks = [
                 CommandHandler("stop", self.stop),
                 CallbackQueryHandler(self.finish, pattern=FINISH),
-                ],
+            ],
             allow_reentry=True,
             map_to_parent = {
                 END: ALL_ACTIONS
             }
         )
+        promotions = ConversationHandler(
+            entry_points = [
+                CallbackQueryHandler(self.promotions, pattern=PROMOTIONS),
+                # CallbackQueryHandler(self.ontest, pattern=ON_TEST) #!
+            ],
+            states = {
+                PROMOTIONS_INQUIRY: [
+                    # CallbackQueryHandler(self.register_promotions, pattern=PICK_PROMOTION),
+                    *register_message_handlers,
+                    back
+                ]
+            },
+            fallbacks = [
+                CommandHandler("stop", self.stop),
+                CallbackQueryHandler(self.finish, pattern=FINISH),
+            ],
+            allow_reentry=True,
+            map_to_parent = {
+                END: ALL_ACTIONS
+            }
+        )         
+
 
         cv = ConversationHandler(
             entry_points = [CommandHandler("start", self.start)],
@@ -556,10 +687,11 @@ class Massage:
                     about,
                     massage_types,
                     register,
-                    # CallbackQueryHandler(self.about, pattern="about"),
+                    promotions,
                     CallbackQueryHandler(self.prices, pattern=PRICES),
-                    # CallbackQueryHandler(self.on_test, pattern=ON_TEST),
-                    # CallbackQueryHandler(self.back, pattern="back")
+                    # CallbackQueryHandler(self.register, pattern=REGISTER),
+                    # CallbackQueryHandler(self.ontest, pattern=ON_TEST),
+                    CallbackQueryHandler(self.home, pattern=HOME),
                 ],                
             },
             fallbacks=[
@@ -570,9 +702,6 @@ class Massage:
         )
 
         self.app.add_handler(cv)
-        # for i in pages:
-        #     page = self._setup_handlers(*i) 
-        #     self.app.add_handler(page)
 
         self.app.run_polling()
         
